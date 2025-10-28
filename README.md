@@ -5,3 +5,8 @@ HTTP API that buffers incoming measurements and writes batches of 50 to `./batch
 Body = one measurement JSON. When 50 are collected, a batch JSON is written to `./batches`.
 
 **Signature:** CREATED BY WAKAMA.farm & Supported by Solana foundation
+
+## Générateur de données (dev)
+```bash
+npm run gen -- 50
+# produit ./batches/<timestamp>_<uuid>.json

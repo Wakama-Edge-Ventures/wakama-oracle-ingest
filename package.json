@@ -1,3 +1,15 @@
-{ "name":"wakama-oracle-ingest","private":true,"type":"module",
-  "scripts":{"start":"node src/index.js"},
-  "dependencies":{"express":"^4.19.2","ajv":"^8.12.0","uuid":"^9.0.1","fs-extra":"^11.2.0"}}
+{
+  "name": "wakama-oracle-ingest",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "gen": "node tools/generate.cjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ajv": "^8.12.0",
+    "uuid": "^9.0.1",
+    "fs-extra": "^11.2.0"
+  }
+}
