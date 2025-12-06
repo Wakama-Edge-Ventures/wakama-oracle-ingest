@@ -1,3 +1,6 @@
+// tools/generate.js (ou src/generate.js selon ton arbo)
+// CommonJS
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -42,18 +45,15 @@ function one(ts, zone, dev, s, team) {
     u = 'u';
   }
 
-  // outliers légers
   if (Math.random() < 0.01) {
     v *= Math.random() < 0.5 ? 0.5 : 1.5;
   }
-
-  const iso = new Date(ts).toISOString();
 
   return {
     zone_id: zone,
     device_id: dev,
     sensor_type: s,
-    ts: iso,
+    ts: new Date(ts).toISOString(),
     value: Math.round(v * 10) / 10,
     unit: u,
     team: normalizeTeam(team), // ✅ M2 canonical
@@ -61,39 +61,39 @@ function one(ts, zone, dev, s, team) {
 }
 
 (function main() {
+  // Args compat + option team en 5e position
   const N = parseInt(process.argv[2] || '50', 10);
   const zone = process.argv[3] || 'raviart';
   const dev = process.argv[4] || 'esp32-cam-01';
-  const teamArg = process.argv[5]; // optionnel
+  const teamArg = process.argv[5];
 
   const team = normalizeTeam(teamArg);
 
   const sensors = ['dht22_temp', 'dht22_hum', 'ds18b20', 'soil_moisture'];
   const t0 = Date.now();
-  const m = [];
+  const measures = [];
 
   for (let i = 0; i < N; i++) {
-    m.push(one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team));
+    measures.push(one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team));
   }
 
-  const b = {
+  const batch = {
     batch_id: crypto.randomUUID(),
-    team,                 // ✅ batch-level canonical
-    source: 'simulated',  // ✅ utile côté publisher/dashboard
-    ts_min: m[0].ts,
-    ts_max: m[m.length - 1].ts,
-    count: m.length,
-    measures: m,
+    team,                // ✅ batch-level canonical
+    source: 'simulated', // ✅ cohérent M2
+    ts_min: measures[0].ts,
+    ts_max: measures[measures.length - 1].ts,
+    count: measures.length,
+    measures,
   };
 
-  // ensure batches dir
   const outDir = path.join(process.cwd(), 'batches');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-  const safeTs = b.ts_min.replace(/[:.]/g, '-');
-  const name = `${safeTs}_${b.batch_id}.json`;
+  const safeTs = String(batch.ts_min).replace(/[:.]/g, '-');
+  const name = `${safeTs}_${batch.batch_id}.json`;
   const outPath = path.join(outDir, name);
 
-  fs.writeFileSync(outPath, JSON.stringify(b, null, 2), 'utf8');
+  fs.writeFileSync(outPath, JSON.stringify(batch, null, 2), 'utf8');
   console.log(outPath);
 })();
