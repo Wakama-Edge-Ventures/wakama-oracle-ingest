@@ -1,16 +1,26 @@
 // tools/generate.js (ou src/generate.js selon ton arbo)
-// CommonJS
+// CommonJS, Node >=18
 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const CANONICAL_TEAM_ID = 'Wakama_team';
+const SIM_SOURCE = 'simulated';
 
 function normalizeTeam(raw) {
   const t = (raw || '').toString().trim();
   if (!t) return CANONICAL_TEAM_ID;
-  if (t === 'team_wakama' || t === 'Wakama Core') return CANONICAL_TEAM_ID;
+
+  if (
+    t === 'team_wakama' ||
+    t === 'Wakama Core' ||
+    t === 'Wakama Team' ||
+    t === 'Wakama team'
+  ) {
+    return CANONICAL_TEAM_ID;
+  }
+
   return t;
 }
 
@@ -45,24 +55,30 @@ function one(ts, zone, dev, s, team) {
     u = 'u';
   }
 
+  // outliers légers
   if (Math.random() < 0.01) {
     v *= Math.random() < 0.5 ? 0.5 : 1.5;
   }
+
+  const iso = new Date(ts).toISOString();
 
   return {
     zone_id: zone,
     device_id: dev,
     sensor_type: s,
-    ts: new Date(ts).toISOString(),
+    ts: iso,
     value: Math.round(v * 10) / 10,
     unit: u,
     team: normalizeTeam(team), // ✅ M2 canonical
+    source: SIM_SOURCE,        // ✅ cohérent M2
   };
 }
 
 (function main() {
   // Args compat + option team en 5e position
-  const N = parseInt(process.argv[2] || '50', 10);
+  const Nraw = parseInt(process.argv[2] || '50', 10);
+  const N = Number.isFinite(Nraw) && Nraw > 0 ? Nraw : 50;
+
   const zone = process.argv[3] || 'raviart';
   const dev = process.argv[4] || 'esp32-cam-01';
   const teamArg = process.argv[5];
@@ -74,15 +90,17 @@ function one(ts, zone, dev, s, team) {
   const measures = [];
 
   for (let i = 0; i < N; i++) {
-    measures.push(one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team));
+    measures.push(
+      one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team),
+    );
   }
 
   const batch = {
     batch_id: crypto.randomUUID(),
     team,                // ✅ batch-level canonical
-    source: 'simulated', // ✅ cohérent M2
-    ts_min: measures[0].ts,
-    ts_max: measures[measures.length - 1].ts,
+    source: SIM_SOURCE,  // ✅ cohérent M2
+    ts_min: measures[0]?.ts || '',
+    ts_max: measures[measures.length - 1]?.ts || '',
     count: measures.length,
     measures,
   };
@@ -90,7 +108,7 @@ function one(ts, zone, dev, s, team) {
   const outDir = path.join(process.cwd(), 'batches');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-  const safeTs = String(batch.ts_min).replace(/[:.]/g, '-');
+  const safeTs = String(batch.ts_min || new Date().toISOString()).replace(/[:.]/g, '-');
   const name = `${safeTs}_${batch.batch_id}.json`;
   const outPath = path.join(outDir, name);
 
