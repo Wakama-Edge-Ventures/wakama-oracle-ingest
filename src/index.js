@@ -14,6 +14,7 @@ const need = ["zone_id", "device_id", "sensor_type", "ts", "value", "unit"];
 
 // M2 canonical team key
 const CANONICAL_TEAM_ID = "Wakama_team";
+const INGEST_SOURCE = "ingest";
 
 function normalizeMeasure(m) {
   // On accepte quelques variantes legacy si jamais elles apparaissent
@@ -28,7 +29,13 @@ function normalizeMeasure(m) {
       ? CANONICAL_TEAM_ID
       : rawTeam || CANONICAL_TEAM_ID;
 
-  return { ...m, team };
+  // Ajout doux de source (si déjà fourni, on respecte)
+  const source =
+    (typeof m.source === "string" && m.source.trim())
+      ? m.source.trim()
+      : INGEST_SOURCE;
+
+  return { ...m, team, source };
 }
 
 app.post("/ingest", async (req, res) => {
@@ -58,7 +65,8 @@ app.post("/ingest", async (req, res) => {
 
     const lot = {
       batch_id: id,
-      team: CANONICAL_TEAM_ID, // label batch-level par défaut
+      team: CANONICAL_TEAM_ID, // label batch-level par défaut (Wakama interne)
+      source: INGEST_SOURCE,
       ts_min: tsMin,
       ts_max: tsMax,
       count: buf.length,
