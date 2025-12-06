@@ -1,3 +1,4 @@
+// src/generate.cjs
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -17,7 +18,6 @@ function rndn(mu, s) {
   while (!v) v = Math.random();
   return mu + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
-
 function clip(x, a, b) {
   return Math.max(a, Math.min(b, x));
 }
@@ -68,29 +68,29 @@ function one(ts, zone, dev, s, team) {
 
   const sensors = ['dht22_temp', 'dht22_hum', 'ds18b20', 'soil_moisture'];
   const t0 = Date.now();
-  const m = [];
+  const measures = [];
 
   for (let i = 0; i < N; i++) {
-    m.push(one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team));
+    measures.push(one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team));
   }
 
-  const b = {
+  const batch = {
     batch_id: crypto.randomUUID(),
     team,                // ✅ batch-level canonical
-    source: 'simulated', // ✅ cohérent publishers/dashboard
-    ts_min: m[0].ts,
-    ts_max: m[m.length - 1].ts,
-    count: m.length,
-    measures: m,
+    source: 'simulated', // ✅ cohérent M2
+    ts_min: measures[0].ts,
+    ts_max: measures[measures.length - 1].ts,
+    count: measures.length,
+    measures,
   };
 
   const outDir = path.join(process.cwd(), 'batches');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-  const safeTs = String(b.ts_min).replace(/[:.]/g, '-');
-  const name = `${safeTs}_${b.batch_id}.json`;
+  const safeTs = String(batch.ts_min).replace(/[:.]/g, '-');
+  const name = `${safeTs}_${batch.batch_id}.json`;
   const outPath = path.join(outDir, name);
 
-  fs.writeFileSync(outPath, JSON.stringify(b, null, 2), 'utf8');
+  fs.writeFileSync(outPath, JSON.stringify(batch, null, 2), 'utf8');
   console.log(outPath);
 })();
