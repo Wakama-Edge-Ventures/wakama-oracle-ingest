@@ -1,4 +1,4 @@
-// src/generate.cjs
+// tools/generate.cjs
 // CommonJS, Node >=18
 
 const fs = require('fs');
@@ -6,17 +6,22 @@ const path = require('path');
 const crypto = require('crypto');
 
 const CANONICAL_TEAM_ID = 'Wakama_team';
-const SIM_SOURCE = 'simulated';
+const DEFAULT_SOURCE = 'simulated';
+
+function strTrim(x) {
+  return (x || '').toString().trim();
+}
 
 function normalizeTeam(raw) {
-  const t = (raw || '').toString().trim();
+  const t = strTrim(raw);
   if (!t) return CANONICAL_TEAM_ID;
 
   if (
     t === 'team_wakama' ||
     t === 'Wakama Core' ||
     t === 'Wakama Team' ||
-    t === 'Wakama team'
+    t === 'Wakama team' ||
+    t === 'Wakama_team'
   ) {
     return CANONICAL_TEAM_ID;
   }
@@ -35,19 +40,19 @@ function clip(x, a, b) {
   return Math.max(a, Math.min(b, x));
 }
 
-function one(ts, zone, dev, s, team) {
+function one(ts, zone, dev, sensor, team, source) {
   let v, u;
 
-  if (s === 'dht22_temp') {
+  if (sensor === 'dht22_temp') {
     v = clip(rndn(28, 2) + 0.002 * ((ts / 1000) % 3600), 15, 45);
     u = '°C';
-  } else if (s === 'dht22_hum') {
+  } else if (sensor === 'dht22_hum') {
     v = clip(rndn(70, 5), 20, 100);
     u = '%';
-  } else if (s === 'ds18b20') {
+  } else if (sensor === 'ds18b20') {
     v = clip(rndn(27, 1.5), 10, 50);
     u = '°C';
-  } else if (s === 'soil_moisture') {
+  } else if (sensor === 'soil_moisture') {
     v = clip(rndn(55, 8), 5, 100);
     u = '%';
   } else {
@@ -60,29 +65,34 @@ function one(ts, zone, dev, s, team) {
   }
 
   const iso = new Date(ts).toISOString();
+  const tNorm = normalizeTeam(team);
+  const sNorm = strTrim(source) || DEFAULT_SOURCE;
 
   return {
     zone_id: zone,
     device_id: dev,
-    sensor_type: s,
+    sensor_type: sensor,
     ts: iso,
     value: Math.round(v * 10) / 10,
     unit: u,
-    team: normalizeTeam(team), // ✅ M2 canonical
-    source: SIM_SOURCE,        // ✅ cohérent M2
+    team: tNorm,
+    source: sNorm,
   };
 }
 
 (function main() {
-  // Args compat + option team en 5e position
+  // Args:
+  // node tools/generate.cjs <N> <zone> <device> [team] [source]
   const Nraw = parseInt(process.argv[2] || '50', 10);
   const N = Number.isFinite(Nraw) && Nraw > 0 ? Nraw : 50;
 
   const zone = process.argv[3] || 'raviart';
   const dev = process.argv[4] || 'esp32-cam-01';
   const teamArg = process.argv[5];
+  const sourceArg = process.argv[6];
 
   const team = normalizeTeam(teamArg);
+  const source = strTrim(sourceArg) || DEFAULT_SOURCE;
 
   const sensors = ['dht22_temp', 'dht22_hum', 'ds18b20', 'soil_moisture'];
   const t0 = Date.now();
@@ -90,14 +100,16 @@ function one(ts, zone, dev, s, team) {
 
   for (let i = 0; i < N; i++) {
     measures.push(
-      one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team),
+      one(t0 + i * 1000, zone, dev, sensors[i % sensors.length], team, source),
     );
   }
 
   const batch = {
     batch_id: crypto.randomUUID(),
-    team,                // ✅ batch-level canonical
-    source: SIM_SOURCE,  // ✅ cohérent M2
+    team,
+    source,
+    zone_id: zone,
+    device_id: dev,
     ts_min: measures[0]?.ts || '',
     ts_max: measures[measures.length - 1]?.ts || '',
     count: measures.length,
